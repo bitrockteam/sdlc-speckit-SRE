@@ -111,9 +111,13 @@ il preset `sre` e l'estensione `run`: si costruisce solo ciò che qui ha un buco
 
 ## Aperto
 
-- I manifest Kubernetes (limits, HPA, repliche) nascono da Spec Kit o vivono in un repo
-  separato? Nel secondo caso c'è un secondo drift, fra plan e manifest.
 - Chi possiede i campi non funzionali del `plan.md`: developer o SRE?
 - Qual è la soglia di rischio che fa entrare l'SRE in una feature.
 - Come si misura lo spec drift: la spec descrive ancora il codice in esecuzione?
 - Cosa fa esattamente `converge`, e se le estensioni per i bug sono core o community.
+
+Chiusi:
+
+- Dove vivono i manifest Kubernetes: nel repo, accanto alla feature che li produce, come base
+  Kustomize neutra più un overlay per ambiente (constitution v1.1.0, 2026-10-05). Un repo
+  separato avrebbe aperto un secondo drift, fra plan e manifest.
