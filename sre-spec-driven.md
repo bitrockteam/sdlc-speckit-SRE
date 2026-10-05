@@ -111,8 +111,6 @@ il preset `sre` e l'estensione `run`: si costruisce solo ciò che qui ha un buco
 
 ## Aperto
 
-- Chi possiede i campi non funzionali del `plan.md`: developer o SRE?
-- Qual è la soglia di rischio che fa entrare l'SRE in una feature.
 - Come si misura lo spec drift: la spec descrive ancora il codice in esecuzione?
 - Cosa fa esattamente `converge`, e se le estensioni per i bug sono core o community.
 
@@ -121,3 +119,10 @@ Chiusi:
 - Dove vivono i manifest Kubernetes: nel repo, accanto alla feature che li produce, come base
   Kustomize neutra più un overlay per ambiente (constitution v1.1.0, 2026-10-05). Un repo
   separato avrebbe aperto un secondo drift, fra plan e manifest.
+- Chi possiede i campi non funzionali del `plan.md`: l'SRE. I principi III-VIII (operabilità,
+  risorse limitate, osservabilità, provenance, safe delivery, postmortem) sono suoi, quindi
+  anche i vincoli `OC-xxx`, gli SLO e il budget di risorse che ne derivano nel plan; il Dev li
+  scrive, l'SRE li approva al gate del plan (constitution v1.0.0, 2026-10-05).
+- Soglia di rischio che fa entrare l'SRE in una feature: un nuovo servizio, un nuovo datastore o
+  un percorso sensibile al carico. Sopra la soglia scatta il gate SRE al plan; sotto, l'SRE
+  interviene solo al gate di production readiness (constitution v1.0.0, 2026-10-05).
