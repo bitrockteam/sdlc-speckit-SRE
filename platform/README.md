@@ -1,38 +1,39 @@
-# Piattaforma
+# Platform
 
-Livello piattaforma, proprietario SRE. Qui stanno le decisioni che valgono per tutte le feature
-e che consumano l'envelope della constitution prima che una feature ne chieda una quota.
+Platform level, SRE owner. This is where the decisions that apply to all features live, and that
+consume the constitution's envelope before a feature asks for a share of it.
 
-## Ambienti
+## Environments
 
-| Ambiente | Dove | Envelope | Stato |
+| Environment | Where | Envelope | Status |
 |---|---|---|---|
-| `dev` | cluster kind locale (`platform/kind/`) | 2 CPU / 4 GiB, invalicabile (constitution) | attivo |
-| `test` | cluster GKE | da definire con il cliente | possibile in qualsiasi momento |
-| `prod` | cluster GKE | da definire con il cliente | possibile in qualsiasi momento |
+| `dev` | local kind cluster (`platform/kind/`) | 2 CPU / 4 GiB, hard limit (constitution) | active |
+| `test` | GKE cluster | to be defined with the customer | possible at any time |
+| `prod` | GKE cluster | to be defined with the customer | possible at any time |
 
-`dev` è l'ambiente in cui oggi si sviluppa, si fa il deploy e si fa il run di ogni feature.
-`test` e `prod`, quando nasceranno, saranno cluster GKE veri, ciascuno con il proprio envelope e
-il proprio overlay. Il design di una feature deve stare in tutti gli envelope dichiarati; finché
-esiste solo `dev`, il riferimento è il suo.
+`dev` is the environment where every feature is developed, deployed and run today. `test` and
+`prod`, when they come into being, will be real GKE clusters, each with its own envelope and its
+own overlay. A feature's design must fit in all the declared envelopes; as long as only `dev`
+exists, the reference is its envelope.
 
-## Decisione P-001: esposizione, mesh e stack di osservabilità
+## Decision P-001: exposure, mesh and observability stack
 
-**Stato**: accettata, 2026-10-05.
+**Status**: accepted, 2026-10-05.
 
-**Vincolo**: requests disponibili per osservabilità e applicazione: **800m CPU, ~3,0 GiB**. La
-CPU è la risorsa scarsa; la memoria no. Ogni componente qui sotto si paga in requests, non in
-uso medio, perché è la somma delle requests che lo scheduler confronta con l'allocatable.
+**Constraint**: requests available for observability and application: **800m CPU, ~3.0 GiB**.
+CPU is the scarce resource; memory is not. Every component below is paid for in requests, not in
+average usage, because the sum of the requests is what the scheduler compares with the
+allocatable.
 
-### Esposizione degli endpoint: NodePort, niente ingress controller
+### Endpoint exposure: NodePort, no ingress controller
 
-Gli endpoint escono sulla macchina tramite `extraPortMappings` di kind verso NodePort, legati a
-`127.0.0.1`. Un ingress controller costerebbe 100m o più di requests per instradare un solo
-servizio applicativo, cioè un ottavo dell'envelope in cambio di nulla che serva al test.
-ingress-nginx inoltre è stato ritirato dal progetto Kubernetes nel 2026: non si adotta un
-componente senza manutenzione. Se in futuro servirà routing per host o path, si valuterà la
-Gateway API con una feature dedicata che ne giustifichi la quota. Su GKE la Gateway API è
-gestita e non costa envelope (vedi Portabilità).
+Endpoints reach the machine through kind's `extraPortMappings` to NodePorts, bound to
+`127.0.0.1`. An ingress controller would cost 100m or more of requests to route a single
+application service, that is one eighth of the envelope in exchange for nothing the test needs.
+ingress-nginx was also retired from the Kubernetes project in 2026: a component without
+maintenance is not adopted. If host or path routing is needed in the future, the Gateway API will
+be evaluated with a dedicated feature that justifies its share. On GKE the Gateway API is managed
+and costs no envelope (see Portability to GKE).
 
 | Endpoint | NodePort | Host |
 |---|---|---|
@@ -40,77 +41,77 @@ gestita e non costa envelope (vedi Portabilità).
 | Prometheus | 30090 | `127.0.0.1:30090` |
 | Grafana | 30030 | `127.0.0.1:30030` |
 
-Aggiungere una porta richiede di ricreare il cluster: kind non modifica i port mapping di un
-cluster esistente. La porta di Grafana è stata aggiunta ricreando il cluster il 2026-10-05,
-quando conteneva solo i pod di sistema.
+Adding a port requires recreating the cluster: kind does not change the port mappings of an
+existing cluster. Grafana's port was added by recreating the cluster on 2026-10-05, when it
+contained only the system pods.
 
-### Service mesh: nessuna
+### Service mesh: none
 
-Istio con il profilo di default chiede per il solo istiod 500m CPU e 2 GiB di requests, più un
-sidecar per pod: da solo supera l'envelope. Linkerd costa meno ma aggiunge un proxy per pod e
-un control plane di tre componenti, e dal 2024 il progetto open source pubblica solo release
-edge. Il beneficio tipico di una mesh (mTLS fra servizi, metriche golden, retry) qui non esiste:
-c'è un solo servizio, senza traffico est-ovest, e le metriche RED arrivano già da OpenTelemetry
-(principio V). La mesh torna in discussione quando ci saranno almeno due servizi che si parlano.
+Istio with the default profile asks for 500m CPU and 2 GiB of requests for istiod alone, plus a
+sidecar per pod: by itself it exceeds the envelope. Linkerd costs less but adds a proxy per pod
+and a three-component control plane, and since 2024 the open source project publishes only edge
+releases. The typical benefit of a mesh (mTLS between services, golden metrics, retries) does not
+exist here: there is a single service, with no east-west traffic, and the RED metrics already
+come from OpenTelemetry (principle V). The mesh comes back up for discussion when there are at
+least two services that talk to each other.
 
-### Stack di osservabilità: tutto OTLP, un solo collector
+### Observability stack: all OTLP, a single collector
 
-L'applicazione emette metriche, trace e log via OpenTelemetry verso un **OpenTelemetry
-Collector** nel cluster; il collector raccoglie anche i log dei pod dai file del nodo. Ogni
-backend riceve OTLP nativamente, quindi non servono exporter proprietari.
+The application emits metrics, traces and logs via OpenTelemetry to an **OpenTelemetry
+Collector** in the cluster; the collector also gathers the pod logs from the node's files. Every
+backend receives OTLP natively, so no proprietary exporters are needed.
 
-| Componente | Ruolo | CPU req | Mem req | Mem limit | Limite dati |
+| Component | Role | CPU req | Mem req | Mem limit | Data limit |
 |---|---|---|---|---|---|
-| OTel Collector (contrib) | OTLP in, log dei pod, smistamento | 100m | 128Mi | 256Mi | batch e memory limiter |
-| Prometheus (OTLP receiver) | metriche, regole SLO e alert | 150m | 512Mi | 1Gi | 3 giorni, 2 GiB |
-| Loki, single binary, filesystem | log | 100m | 256Mi | 512Mi | 3 giorni |
-| Tempo, monolitico | trace | 50m | 128Mi | 256Mi | 24 ore |
-| Grafana | dashboard SLO | 50m | 128Mi | 256Mi | nessuno |
-| **Totale osservabilità** | | **450m** | **~1,1 GiB** | | |
-| **Resta all'applicazione** | | **350m** | **~1,9 GiB** | | |
+| OTel Collector (contrib) | OTLP in, pod logs, routing | 100m | 128Mi | 256Mi | batch and memory limiter |
+| Prometheus (OTLP receiver) | metrics, SLO rules and alerts | 150m | 512Mi | 1Gi | 3 days, 2 GiB |
+| Loki, single binary, filesystem | logs | 100m | 256Mi | 512Mi | 3 days |
+| Tempo, monolithic | traces | 50m | 128Mi | 256Mi | 24 hours |
+| Grafana | SLO dashboards | 50m | 128Mi | 256Mi | none |
+| **Observability total** | | **450m** | **~1.1 GiB** | | |
+| **Left for the application** | | **350m** | **~1.9 GiB** | | |
 
-Loki entra perché i log strutturati JSON del principio V devono essere interrogabili insieme a
-metriche e trace durante un incidente; senza un backend resterebbero solo `kubectl logs`, che
-perde tutto al riavvio del pod.
+Loki is included because the structured JSON logs of principle V must be queryable together with
+metrics and traces during an incident; without a backend only `kubectl logs` would remain, which
+loses everything when the pod restarts.
 
-Il disco del nodo non è limitato da `docker update`: per questo ogni backend dichiara una
-retention e, dove possibile, un tetto di dimensione (principio IV vale anche per la
-piattaforma).
+The node's disk is not limited by `docker update`: for this reason every backend declares a
+retention and, where possible, a size cap (principle IV applies to the platform too).
 
-Il generatore di carico per verificare gli SC gira sulla macchina host, fuori dal cluster, così
-non consuma envelope e misura il servizio dal punto di vista dell'utente.
+The load generator used to verify the SCs runs on the host machine, outside the cluster, so it
+consumes no envelope and measures the service from the user's point of view.
 
-### Portabilità verso GKE
+### Portability to GKE
 
-Il porting su GKE deve restare possibile in qualsiasi momento senza toccare spec né codice:
-cambia solo la configurazione d'ambiente. Regole:
+Porting to GKE must remain possible at any time without touching the spec or the code: only the
+environment configuration changes. Rules:
 
-- **Base più overlay.** I manifest di ogni feature sono una base neutra (Deployment, Service
-  `ClusterIP`, ConfigMap) con un overlay per ambiente (`dev` oggi, `test` e `prod` su GKE quando serviranno), tramite
-  Kustomize, già incluso in `kubectl` e quindi senza nuove dipendenze (principio IX).
-  Nell'overlay vanno solo le differenze d'ambiente: esposizione, riferimento all'immagine,
-  exporter del collector.
-- **Esposizione solo nell'overlay.** In `dev` è NodePort. Su GKE è la Gateway API con il
-  controller gestito di GKE, che non gira nel cluster e quindi non consuma envelope.
-- **Telemetria solo OTLP.** L'applicazione parla soltanto con il collector. Su GKE basta
-  cambiare gli exporter del collector verso Managed Prometheus, Cloud Logging e Cloud Trace,
-  oppure tenere lo stesso stack: l'applicazione non se ne accorge.
-- **Niente costrutti specifici di kind nella base:** nessun `hostPath`, nessun riferimento a
-  nodi, nessuna `storageClassName` esplicita (si usa la classe di default di ciascun cluster).
-  La raccolta dei log dei pod dai file del nodo è un dettaglio d'ambiente e sta nell'overlay.
-- **L'envelope diventa una `ResourceQuota`.** Il limite di 800m e ~3,0 GiB di requests si
-  applica come `ResourceQuota` sui namespace dell'applicazione e dell'osservabilità. In `dev` fa
-  rispettare la regola della constitution già in fase di ammissione, invece che solo in review;
-  su GKE ogni ambiente avrà la propria quota, pari al suo envelope.
-- **Immagini per riferimento.** In `dev` si caricano con `kind load`; su GKE vengono da Artifact
-  Registry. Cambia solo il riferimento nell'overlay, mentre le label OCI di provenance
-  (principio VI) restano identiche.
+- **Base plus overlay.** Each feature's manifests are a neutral base (Deployment, `ClusterIP`
+  Service, ConfigMap) with one overlay per environment (`dev` today, `test` and `prod` on GKE when
+  needed), through Kustomize, already included in `kubectl` and therefore with no new
+  dependencies (principle IX). The overlay holds only the environment differences: exposure,
+  image reference, collector exporters.
+- **Exposure only in the overlay.** In `dev` it is NodePort. On GKE it is the Gateway API with
+  GKE's managed controller, which does not run in the cluster and therefore consumes no envelope.
+- **Telemetry only OTLP.** The application talks only to the collector. On GKE it is enough to
+  change the collector's exporters toward Managed Prometheus, Cloud Logging and Cloud Trace, or
+  to keep the same stack: the application does not notice.
+- **No kind-specific constructs in the base:** no `hostPath`, no references to nodes, no explicit
+  `storageClassName` (each cluster's default class is used). Collecting pod logs from the node's
+  files is an environment detail and lives in the overlay.
+- **The envelope becomes a `ResourceQuota`.** The limit of 800m and ~3.0 GiB of requests is
+  applied as a `ResourceQuota` on the application and observability namespaces. In `dev` it
+  enforces the constitution's rule already at admission time, instead of only in review; on GKE
+  each environment will have its own quota, equal to its envelope.
+- **Images by reference.** In `dev` they are loaded with `kind load`; on GKE they come from
+  Artifact Registry. Only the reference in the overlay changes, while the OCI provenance labels
+  (principle VI) stay identical.
 
-Ne segue un vincolo per il plan di 001: il datastore scelto deve funzionare uguale su kind e su
-GKE, cioè su un volume persistente generico o come servizio esterno raggiungibile per indirizzo.
+A constraint follows for the plan of 001: the chosen datastore must work the same on kind and on
+GKE, that is on a generic persistent volume or as an external service reachable by address.
 
-### Conseguenza per il design dell'applicazione
+### Consequence for the application design
 
-Il plan di 001 parte da **350m CPU e ~1,9 GiB** di requests, non da 800m. Con due repliche a
-100m resta un margine di 150m per rollout e picchi. È questo il numero che il gate SRE del plan
-verificherà.
+The plan of 001 starts from **350m CPU and ~1.9 GiB** of requests, not from 800m. With two
+replicas at 100m a margin of 150m remains for rollouts and spikes. This is the number the plan's
+SRE gate will verify.

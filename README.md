@@ -1,91 +1,92 @@
 # sdlc-speckit-SRE
 
-Esperimento sul campo: sviluppo spec-driven con [Spec Kit](https://github.com/github/spec-kit)
-esteso al "run it". Il ciclo non si ferma alla scrittura della funzionalità ma copre operabilità,
-SLO, deploy su Kubernetes, verifica e postmortem. La domanda di fondo: **in quale momento del
-design di un'applicazione entra in gioco l'SRE**, quando il codice è un artefatto derivato dalla
-spec.
+Field experiment: spec-driven development with [Spec Kit](https://github.com/github/spec-kit)
+extended to "run it". The cycle does not stop at writing the feature but covers operability,
+SLOs, deployment on Kubernetes, verification and postmortems. The underlying question: **at what
+point in an application's design does the SRE come in**, when the code is an artifact derived from
+the spec.
 
-## Il banco di prova
+## The test bed
 
-- **App**: un URL shortener in Go, scritto interamente con Spec Kit.
-- **Infra**: l'ambiente `dev` è un cluster kind locale sulla macchina dello sviluppatore;
-  `test` e `prod` potranno essere cluster GKE.
-  La piattaforma resta portabile su GKE in qualsiasi momento (vedi
-  [`platform/README.md`](platform/README.md)). La capacità
-  riproduce l'infrastruttura reale indicata dal cliente ed è un **limite invalicabile**: è
-  l'applicazione ad adattarsi alla piattaforma, non il contrario.
-- **Ruoli**: Dev e SRE sono la stessa persona, ma restano ruoli distinti; ogni principio e ogni
-  artefatto ha un solo proprietario (vedi la constitution).
+- **App**: a URL shortener in Go, written entirely with Spec Kit.
+- **Infra**: the `dev` environment is a local kind cluster on the developer's machine;
+  `test` and `prod` may be GKE clusters.
+  The platform stays portable to GKE at any time (see
+  [`platform/README.md`](platform/README.md)). The capacity
+  reproduces the real infrastructure specified by the customer and is a **hard limit**: it is
+  the application that adapts to the platform, not the other way around.
+- **Roles**: Dev and SRE are the same person, but remain distinct roles; every principle and every
+  artifact has a single owner (see the constitution).
 
-## La piattaforma
+## The platform
 
-Un cluster kind a nodo singolo, creato con `platform/kind/up.ps1` e distrutto con
-`platform/kind/down.ps1`. Il tetto è imposto in due punti: `docker update` sul container del nodo
-(il limite reale) e `systemReserved` del kubelet (così lo scheduler vede la stessa capacità).
+A single-node kind cluster, created with `platform/kind/up.ps1` and destroyed with
+`platform/kind/down.ps1`. The ceiling is enforced in two places: `docker update` on the node
+container (the real limit) and the kubelet's `systemReserved` (so the scheduler sees the same
+capacity).
 
-| Voce (misurata il 2026-10-05) | CPU | Memoria |
+| Item (measured on 2026-10-05) | CPU | Memory |
 |---|---|---|
-| Tetto del nodo | 2 | 4 GiB |
-| Allocatable | 1750m | ~3,3 GiB |
-| Pod di sistema Kubernetes (requests) | 950m | 290 MiB |
-| **Disponibile per osservabilità e applicazione (requests)** | **800m** | **~3,0 GiB** |
+| Node ceiling | 2 | 4 GiB |
+| Allocatable | 1750m | ~3.3 GiB |
+| Kubernetes system pods (requests) | 950m | 290 MiB |
+| **Available for observability and application (requests)** | **800m** | **~3.0 GiB** |
 
-La risorsa scarsa è la CPU: i pod di sistema ne prenotano già il 54%. Questo envelope sta nella
-constitution ed è il primo input dell'SRE al design: ogni plan deve dichiarare la quota che usa.
+The scarce resource is CPU: the system pods already reserve 54% of it. This envelope lives in the
+constitution and is the SRE's first input to the design: every plan must declare the share it uses.
 
-## Ordine di lavoro e punti di ingresso dell'SRE
+## Work order and SRE entry points
 
-| # | Passo Spec Kit | Chi | Cosa fa l'SRE |
+| # | Spec Kit step | Who | What the SRE does |
 |---|---|---|---|
-| 0 | `/speckit-constitution` | SRE + Dev | **Primo ingresso.** Scrive una volta i principi di operabilità (III-VIII): SLO, risorse limitate, osservabilità, provenance, safe delivery, postmortem. Ogni feature li eredita. |
-| 1 | `/speckit-specify` | Dev | Legge soltanto. Verifica che i Success Criteria `SC-xxx` siano osservabili. |
-| 2 | `/speckit-clarify` | Dev | Se la feature è a rischio, pone le domande operative: carico atteso, disponibilità, ritenzione dei dati. |
-| 3 | `/speckit-plan` | Dev | **Gate SRE principale, il momento di design.** Vincoli `OC-xxx`, SLO, budget di memoria e CPU, probe, rollout e rollback. |
-| 4 | `/speckit-tasks` | Dev | Verifica che esistano i task di operabilità (metriche, manifest, runbook). |
-| 5 | `/speckit-analyze` | Dev | Coerenza fra artefatti, inclusi i principi III-VII. |
-| 6 | `/speckit-implement` | Dev | Nessun ruolo. |
-| 7 | `/speckit-converge` | Dev | Nessun ruolo. |
-| 8 | Production readiness, deploy su kind | SRE | **Gate prima del deploy.** |
-| 9 | Run: SLO osservati, incidenti | SRE | Postmortem: decide dove andava scritto il vincolo e riporta il fix a monte (passo 0, 1 o 3). |
+| 0 | `/speckit-constitution` | SRE + Dev | **First entry point.** Writes the operability principles (III-VIII) once: SLOs, bounded resources, observability, provenance, safe delivery, postmortems. Every feature inherits them. |
+| 1 | `/speckit-specify` | Dev | Read-only. Checks that the `SC-xxx` Success Criteria are observable. |
+| 2 | `/speckit-clarify` | Dev | If the feature is at risk, asks the operational questions: expected load, availability, data retention. |
+| 3 | `/speckit-plan` | Dev | **Main SRE gate, the design moment.** `OC-xxx` constraints, SLOs, memory and CPU budget, probes, rollout and rollback. |
+| 4 | `/speckit-tasks` | Dev | Checks that the operability tasks exist (metrics, manifests, runbook). |
+| 5 | `/speckit-analyze` | Dev | Consistency across artifacts, including principles III-VII. |
+| 6 | `/speckit-implement` | Dev | No role. |
+| 7 | `/speckit-converge` | Dev | No role. |
+| 8 | Production readiness, deploy on kind | SRE | **Gate before deploy.** |
+| 9 | Run: observed SLOs, incidents | SRE | Postmortem: decides where the constraint should have been written and carries the fix upstream (step 0, 1 or 3). |
 
-Il gate al passo 3 scatta solo per le feature sopra la soglia di rischio: nuovo servizio, nuovo
-datastore, percorso sensibile al carico. La prima feature dell'URL shortener la supera, perché è
-un servizio nuovo.
+The gate at step 3 triggers only for features above the risk threshold: new service, new
+datastore, load-sensitive path. The first URL shortener feature clears it, because it is a new
+service.
 
-Metodo: si parte dai **template standard** di Spec Kit, solo con la constitution arricchita, per
-vedere dove Spec Kit puro non copre il "run it". Preset ed estensione `run` si disegnano dopo, sui
-buchi osservati.
+Method: start from Spec Kit's **standard templates**, with only the constitution enriched, to see
+where plain Spec Kit does not cover "run it". The preset and the `run` extension are designed
+later, on the observed gaps.
 
-## Stato
+## Status
 
-- [x] Spec Kit inizializzato (Claude Code, script Python, estensione `git`)
-- [x] Cluster kind con tetto 2 CPU / 4 GiB, envelope misurato
-- [x] Constitution v1.1.1: Platform Envelope, ambienti e portabilità
-- [x] Prima feature 001: spec scritta (`/speckit-specify`)
-- [x] Decisione di piattaforma P-001 (esposizione, mesh, osservabilità, portabilità), accettata in [`platform/README.md`](platform/README.md)
-- [ ] Feature 001: clarify, plan con gate SRE, tasks, analyze, implement
-- [ ] Primo deploy su kind
-- [ ] Preset `sre` ed estensione `run`, disegnati sui buchi osservati
+- [x] Spec Kit initialized (Claude Code, Python scripts, `git` extension)
+- [x] kind cluster with a 2 CPU / 4 GiB ceiling, envelope measured
+- [x] Constitution v1.1.1: Platform Envelope, environments and portability
+- [x] First feature 001: spec written (`/speckit-specify`)
+- [x] Platform decision P-001 (exposure, mesh, observability, portability), accepted in [`platform/README.md`](platform/README.md)
+- [ ] Feature 001: clarify, plan with SRE gate, tasks, analyze, implement
+- [ ] First deploy on kind
+- [ ] `sre` preset and `run` extension, designed on the observed gaps
 
-## Struttura
+## Structure
 
-- [`.specify/memory/constitution.md`](.specify/memory/constitution.md): i principi del progetto,
-  ciascuno con il suo proprietario (Dev o SRE).
-- [`sre-spec-driven.md`](sre-spec-driven.md): appunti di partenza sul ruolo dell'SRE in uno sviluppo
-  spec-driven.
-- [`platform/`](platform/README.md): decisioni di piattaforma e cluster kind (proprietario SRE).
-- `.specify/`: configurazione Spec Kit (templates, scripts, workflow, estensione `git`).
-- `.claude/skills/`: i comandi `/speckit-*` per Claude Code.
-- `specs/NNN-slug/`: una cartella per feature (spec, plan, tasks), creata da `/speckit-specify`.
+- [`.specify/memory/constitution.md`](.specify/memory/constitution.md): the project's principles,
+  each with its owner (Dev or SRE).
+- [`sre-spec-driven.md`](sre-spec-driven.md): starting notes on the SRE's role in spec-driven
+  development.
+- [`platform/`](platform/README.md): platform decisions and kind cluster (SRE owner).
+- `.specify/`: Spec Kit configuration (templates, scripts, workflow, `git` extension).
+- `.claude/skills/`: the `/speckit-*` commands for Claude Code.
+- `specs/NNN-slug/`: one folder per feature (spec, plan, tasks), created by `/speckit-specify`.
 
-## Prerequisiti
+## Prerequisites
 
-- Go (ultima stabile), Docker, kind, kubectl
+- Go (latest stable), Docker, kind, kubectl
 - [Spec Kit CLI](https://github.com/github/spec-kit): `uv tool install specify-cli`
-- Claude Code, per i comandi `/speckit-*`
+- Claude Code, for the `/speckit-*` commands
 
 ## Branching
 
-Quello di Spec Kit: un branch `NNN-slug` per feature, creato da `/speckit-specify` tramite
-l'estensione `git`, poi fuso su `main` con una pull request.
+Spec Kit's own: one `NNN-slug` branch per feature, created by `/speckit-specify` through the
+`git` extension, then merged into `main` with a pull request.

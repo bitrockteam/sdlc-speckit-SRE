@@ -1,128 +1,131 @@
-# SRE e sviluppo spec-driven
+# SRE and spec-driven development
 
-Brainstorming del 5 ottobre 2026. Contesto: lo sviluppo si fa con
-[Spec Kit](https://github.com/github/spec-kit) e il codice è un artefatto derivato dalla spec.
-Domanda: che ruolo ha l'SRE, e come si riconcilia ciò che accade a runtime su Kubernetes con la
-spec.
+Brainstorming of October 5, 2026. Context: development is done with
+[Spec Kit](https://github.com/github/spec-kit) and the code is an artifact derived from the spec.
+Question: what is the SRE's role, and how do we reconcile what happens at runtime on Kubernetes
+with the spec.
 
-## Il punto di partenza
+## The starting point
 
 > **Recovery ≠ Remediation ≠ Root Cause Resolution**
 
-Restart, scaling e rollback stabilizzano un servizio senza risolvere la causa. Se il codice è
-derivato dalla spec, correggerlo a mano dopo un incidente equivale a modificare codice generato:
-alla rigenerazione successiva il difetto torna. La correzione deve risalire alla spec, al plan,
-ai test o alla constitution.
+Restart, scaling and rollback stabilize a service without resolving the cause. If the code is
+derived from the spec, fixing it by hand after an incident amounts to modifying generated code:
+at the next regeneration the defect comes back. The fix must go back up to the spec, the plan, the
+tests or the constitution.
 
-## Spec Kit, cosa offre già
+## Spec Kit, what it already offers
 
 - Workflow: constitution → specify → clarify → plan → tasks → analyze → implement (→ converge).
-- Per feature: branch `###-feature-name`, con `spec.md`, `plan.md`, `tasks.md`.
-- `spec.md`: Functional Requirements `FR-001`, Success Criteria `SC-001`, misurabili e
+- Per feature: branch `###-feature-name`, with `spec.md`, `plan.md`, `tasks.md`.
+- `spec.md`: Functional Requirements `FR-001`, Success Criteria `SC-001`, measurable and
   technology-agnostic.
-- `plan.md`, Technical Context: **Performance Goals**, **Constraints**, **Scale/Scope**. Testo
-  libero, senza ID.
-- Gate "Constitution Check" nel plan.
-- Nessuna tracciabilità verso commit, deploy o runtime.
+- `plan.md`, Technical Context: **Performance Goals**, **Constraints**, **Scale/Scope**. Free
+  text, no IDs.
+- "Constitution Check" gate in the plan.
+- No traceability toward commits, deploys or runtime.
 
-## Il ponte fra spec e runtime
+## The bridge between spec and runtime
 
-- Ogni `SC-xxx` osservabile diventa un **SLO** etichettato con branch della feature e ID del
-  criterio. Una violazione su Kubernetes porta già il riferimento alla spec.
-- I vincoli tecnici (memoria, latenza) stanno nel `plan.md` senza ID: è il punto scoperto. Il caso
-  memory leak / `OOMKilled` cade lì.
-- Provenance dal pod alla feature con metadati standard: OCI annotations
-  (`org.opencontainers.image.revision`), attestation SLSA, attributi OpenTelemetry, branch Spec Kit.
+- Every observable `SC-xxx` becomes an **SLO** labeled with the feature branch and the criterion
+  ID. A violation on Kubernetes already carries the reference to the spec.
+- Technical constraints (memory, latency) live in `plan.md` without IDs: this is the uncovered
+  spot. The memory leak / `OOMKilled` case falls there.
+- Provenance from the pod to the feature with standard metadata: OCI annotations
+  (`org.opencontainers.image.revision`), SLSA attestation, OpenTelemetry attributes, Spec Kit
+  branch.
 
-## Dove entra l'SRE nel flusso
+## Where the SRE enters the flow
 
-| Fase | Ruolo dell'SRE |
+| Phase | The SRE's role |
 |---|---|
-| `constitution` | principi di operabilità scritti una volta: ogni feature dichiara SLI/SLO, budget di risorse, comportamento in degrado, osservabilità minima, niente cache non limitate. Massima leva. |
-| `specify` / `clarify` | rende i `SC-xxx` osservabili: soglia, finestra, SLI |
-| `plan` | responsabile di Performance Goals, Constraints, Scale/Scope. La production readiness review si sposta qui. |
-| `analyze` | copertura operativa: ogni SC ha un SLO, ogni vincolo ha un test |
-| post-deploy | incident command; postmortem con azioni su spec, constitution o test, non ticket sul codice |
+| `constitution` | operability principles written once: every feature declares SLI/SLO, resource budgets, degraded behavior, minimum observability, no unbounded caches. Maximum leverage. |
+| `specify` / `clarify` | makes the `SC-xxx` observable: threshold, window, SLI |
+| `plan` | owner of Performance Goals, Constraints, Scale/Scope. The production readiness review moves here. |
+| `analyze` | operational coverage: every SC has an SLO, every constraint has a test |
+| post-deploy | incident command; postmortem with actions on spec, constitution or tests, not tickets on the code |
 
-## Chi fa cosa: workflow per livelli
+## Who does what: workflow by levels
 
-Il workflow si organizza sui livelli di Spec Kit, non sulle persone. Ogni livello ha un solo
-proprietario; che dev e SRE coincidano dipende dalla dimensione del team.
+The workflow is organized on Spec Kit's levels, not on people. Each level has a single owner;
+whether dev and SRE coincide depends on the size of the team.
 
-| Livello | Artefatto | Scrive | Interviene |
+| Level | Artifact | Writes | Intervenes |
 |---|---|---|---|
-| progetto | `constitution` | SRE | dev approva |
-| feature | `spec.md`, `plan.md` | dev | SRE solo su `SC-xxx` osservabili e Constraints, e solo per feature a rischio |
-| piattaforma | SLO policy, error budget, manifest (limits, HPA) | SRE | valori derivati dai Constraints del plan |
-| contratto | error budget policy | dev e SRE insieme | unico artefatto scritto a quattro mani |
-| post-incident | postmortem | SRE guida | l'esito atterra al livello giusto |
+| project | `constitution` | SRE | dev approves |
+| feature | `spec.md`, `plan.md` | dev | SRE only on observable `SC-xxx` and Constraints, and only for at-risk features |
+| platform | SLO policy, error budget, manifests (limits, HPA) | SRE | values derived from the plan's Constraints |
+| contract | error budget policy | dev and SRE together | the only artifact written jointly |
+| post-incident | postmortem | SRE leads | the outcome lands at the right level |
 
-In sequenza:
+In sequence:
 
-1. **Una volta**: l'SRE scrive i principi di operabilità nella constitution. Ogni feature li
-   eredita, e il Constitution Check del plan li applica senza che l'SRE riveda ogni feature.
-2. **Per feature**: il dev scrive spec e plan. L'SRE entra in `clarify` solo se la feature supera
-   una soglia di rischio (nuovo servizio, nuovo datastore, picchi di carico, percorso critico).
-3. **Al deploy**: l'SRE traduce `SC-xxx` in SLO e Constraints in limits e HPA.
-4. **Dopo un incidente**: il postmortem decide dove andava scritto il vincolo. Classe di guasti
-   ricorrente → constitution, vale per tutte le feature future. Caso specifico → spec o plan
-   della feature. Ambiente → piattaforma.
+1. **Once**: the SRE writes the operability principles in the constitution. Every feature
+   inherits them, and the plan's Constitution Check applies them without the SRE reviewing every
+   feature.
+2. **Per feature**: the dev writes spec and plan. The SRE enters at `clarify` only if the feature
+   exceeds a risk threshold (new service, new datastore, load spikes, critical path).
+3. **At deploy**: the SRE translates `SC-xxx` into SLOs and Constraints into limits and HPA.
+4. **After an incident**: the postmortem decides where the constraint should have been written.
+   Recurring class of failures → constitution, valid for all future features. Specific case →
+   the feature's spec or plan. Environment → platform.
 
-I tre modelli organizzativi:
+The three organizational models:
 
-- **Stessa persona** (you build it, you run it): funziona in team piccoli. La constitution fa da
-  "SRE in absentia": porta il sapere operativo senza che il dev debba ricordarlo a ogni feature.
-- **Scrivono insieme ogni spec**: non scala, l'SRE diventa il collo di bottiglia proprio quando
-  la generazione accelera. Solo per le feature a rischio.
-- **SRE a valle con specifiche sue**: corretto solo al livello piattaforma. Se l'SRE riscrive i
-  vincoli della feature altrove, nascono due intenti per la stessa cosa e il drift fra plan e
-  manifest è garantito.
+- **Same person** (you build it, you run it): works in small teams. The constitution acts as
+  "SRE in absentia": it carries the operational knowledge without the dev having to remember it
+  at every feature.
+- **They write every spec together**: does not scale, the SRE becomes the bottleneck exactly when
+  generation accelerates. Only for at-risk features.
+- **SRE downstream with their own specifications**: correct only at the platform level. If the
+  SRE rewrites the feature's constraints elsewhere, two intents arise for the same thing and
+  drift between plan and manifests is guaranteed.
 
-## Cosa cambia nel mestiere
+## What changes in the job
 
-- Dalla revisione del singolo change alla scrittura delle regole che ogni generazione rispetta.
-- L'error budget diventa il freno sulla velocità di cambiamento, che con lo sviluppo spec-driven
-  cresce.
-- Il postmortem cambia domanda: non "cosa si è rotto" ma **"dove andava scritto"**:
-  constitution, spec, plan, test o configurazione.
-- Lo **spec drift** diventa una responsabilità naturale dell'SRE: è l'unico ruolo che vede insieme
-  cosa gira e cosa dice la spec.
+- From reviewing the individual change to writing the rules that every generation respects.
+- The error budget becomes the brake on the speed of change, which grows with spec-driven
+  development.
+- The postmortem changes its question: not "what broke" but **"where should it have been
+  written"**: constitution, spec, plan, test or configuration.
+- **Spec drift** becomes a natural responsibility of the SRE: it is the only role that sees
+  together what is running and what the spec says.
 
-## Da dove viene una divergenza a runtime
+## Where a runtime divergence comes from
 
-| Cosa succede | Dove si corregge |
+| What happens | Where it is fixed |
 |---|---|
-| la spec dice X, il runtime fa non-X | implementazione + il test mancante |
-| la spec tace su ciò che si è rotto | spec o plan, poi si rigenera |
-| spec e codice coerenti, l'ambiente rompe | vincoli operativi / configurazione |
-| spec rispettata ma sbagliata rispetto al mondo reale | intento |
+| the spec says X, the runtime does not-X | implementation + the missing test |
+| the spec is silent on what broke | spec or plan, then regenerate |
+| spec and code consistent, the environment breaks | operational constraints / configuration |
+| spec respected but wrong with respect to the real world | intent |
 
-## Buchi osservati in Spec Kit per il "run it"
+## Gaps observed in Spec Kit for "run it"
 
-Registro dei punti in cui Spec Kit vanilla (1.1.1) non copre il lavoro SRE, osservati usando lo
-strumento sulla feature 001. Ogni passo del ciclo aggiunge qui i suoi. È la base per disegnare
-il preset `sre` e l'estensione `run`: si costruisce solo ciò che qui ha un buco documentato.
+Log of the points where vanilla Spec Kit (1.1.1) does not cover SRE work, observed by using the
+tool on feature 001. Each step of the cycle adds its own here. It is the basis for designing the
+`sre` preset and the `run` extension: only what has a documented gap here gets built.
 
-| ID | Passo | Buco | Come l'abbiamo coperto per ora | Dove potrebbe vivere |
+| ID | Step | Gap | How we covered it for now | Where it could live |
 |---|---|---|---|---|
-| G-001 | constitution, plan | Nessun concetto di ambiente: spec e plan non distinguono `dev`, `test` e `prod`, eppure envelope e SLO possono cambiare fra un ambiente e l'altro. | Tabella degli ambienti nella constitution v1.1.0; il design deve stare in tutti gli envelope dichiarati. | preset `sre`: sezione ambienti nel plan-template, con envelope e SLO per ambiente |
-| G-002 | specify | Le linee guida dei Success Criteria spingono verso esiti percepiti e vaghi ("gli utenti vedono i risultati all'istante") e scoraggiano soglie di latenza; all'SRE servono soglie e finestre misurabili sul servizio in esecuzione. | SC-001..SC-008 scritti con percentili, soglie e finestre, misurati al confine del servizio. | preset `sre`: linee guida degli SC nello spec-template |
-| G-003 | fuori ciclo | Nessun livello per le decisioni di piattaforma: tutto è feature (`specs/NNN-slug`), ma la piattaforma consuma envelope prima di ogni feature e non è una feature. | Decisione P-001 in `platform/README.md`, richiamata dalla constitution. | da decidere: un tipo di artefatto "platform decision" o una feature SRE dedicata |
+| G-001 | constitution, plan | No concept of environment: spec and plan do not distinguish `dev`, `test` and `prod`, yet envelope and SLOs may change from one environment to another. | Environments table in constitution v1.1.0; the design must fit in all the declared envelopes. | `sre` preset: environments section in the plan-template, with envelope and SLOs per environment |
+| G-002 | specify | The Success Criteria guidelines push toward perceived, vague outcomes ("users see results instantly") and discourage latency thresholds; the SRE needs measurable thresholds and windows on the running service. | SC-001..SC-008 written with percentiles, thresholds and windows, measured at the service boundary. | `sre` preset: SC guidelines in the spec-template |
+| G-003 | out of cycle | No level for platform decisions: everything is a feature (`specs/NNN-slug`), but the platform consumes envelope before any feature and is not a feature. | Decision P-001 in `platform/README.md`, referenced by the constitution. | to be decided: a "platform decision" artifact type or a dedicated SRE feature |
 
-## Aperto
+## Open
 
-- Come si misura lo spec drift: la spec descrive ancora il codice in esecuzione?
-- Cosa fa esattamente `converge`, e se le estensioni per i bug sono core o community.
+- How spec drift is measured: does the spec still describe the running code?
+- What exactly `converge` does, and whether the extensions for bugs are core or community.
 
-Chiusi:
+Closed:
 
-- Dove vivono i manifest Kubernetes: nel repo, accanto alla feature che li produce, come base
-  Kustomize neutra più un overlay per ambiente (constitution v1.1.0, 2026-10-05). Un repo
-  separato avrebbe aperto un secondo drift, fra plan e manifest.
-- Chi possiede i campi non funzionali del `plan.md`: l'SRE. I principi III-VIII (operabilità,
-  risorse limitate, osservabilità, provenance, safe delivery, postmortem) sono suoi, quindi
-  anche i vincoli `OC-xxx`, gli SLO e il budget di risorse che ne derivano nel plan; il Dev li
-  scrive, l'SRE li approva al gate del plan (constitution v1.0.0, 2026-10-05).
-- Soglia di rischio che fa entrare l'SRE in una feature: un nuovo servizio, un nuovo datastore o
-  un percorso sensibile al carico. Sopra la soglia scatta il gate SRE al plan; sotto, l'SRE
-  interviene solo al gate di production readiness (constitution v1.0.0, 2026-10-05).
+- Where the Kubernetes manifests live: in the repo, next to the feature that produces them, as a
+  neutral Kustomize base plus one overlay per environment (constitution v1.1.0, 2026-10-05). A
+  separate repo would have opened a second drift, between plan and manifests.
+- Who owns the non-functional fields of `plan.md`: the SRE. Principles III-VIII (operability,
+  bounded resources, observability, provenance, safe delivery, postmortems) are theirs, so also
+  the `OC-xxx` constraints, the SLOs and the resource budget that derive from them in the plan;
+  the Dev writes them, the SRE approves them at the plan gate (constitution v1.0.0, 2026-10-05).
+- Risk threshold that brings the SRE into a feature: a new service, a new datastore or a
+  load-sensitive path. Above the threshold the SRE gate triggers at the plan; below it, the SRE
+  intervenes only at the production readiness gate (constitution v1.0.0, 2026-10-05).
