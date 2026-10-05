@@ -15,6 +15,10 @@ nodes:
       - containerPort: 30090
         hostPort: 30090
         listenAddress: 127.0.0.1
+      # Grafana (NodePort)
+      - containerPort: 30030
+        hostPort: 30030
+        listenAddress: 127.0.0.1
     kubeadmConfigPatches:
       - |
         kind: KubeletConfiguration

@@ -63,7 +63,7 @@ buchi osservati.
 - [x] Cluster kind con tetto 2 CPU / 4 GiB, envelope misurato
 - [x] Constitution v1.0.0 con Platform Envelope, in review
 - [x] Prima feature 001: spec scritta (`/speckit-specify`)
-- [ ] Decisione di piattaforma P-001 (esposizione, mesh, osservabilità), proposta in [`platform/README.md`](platform/README.md)
+- [x] Decisione di piattaforma P-001 (esposizione, mesh, osservabilità, portabilità), accettata in [`platform/README.md`](platform/README.md)
 - [ ] Feature 001: clarify, plan con gate SRE, tasks, analyze, implement
 - [ ] Primo deploy su kind
 - [ ] Preset `sre` ed estensione `run`, disegnati sui buchi osservati

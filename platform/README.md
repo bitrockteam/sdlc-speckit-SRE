@@ -18,7 +18,7 @@ esiste solo `dev`, il riferimento è il suo.
 
 ## Decisione P-001: esposizione, mesh e stack di osservabilità
 
-**Stato**: proposta, 2026-10-05, da confermare prima del plan di 001.
+**Stato**: accettata, 2026-10-05.
 
 **Vincolo**: requests disponibili per osservabilità e applicazione: **800m CPU, ~3,0 GiB**. La
 CPU è la risorsa scarsa; la memoria no. Ogni componente qui sotto si paga in requests, non in
@@ -38,10 +38,11 @@ gestita e non costa envelope (vedi Portabilità).
 |---|---|---|
 | URL shortener | 30080 | `127.0.0.1:30080` |
 | Prometheus | 30090 | `127.0.0.1:30090` |
-| Grafana | 30030 | `127.0.0.1:30030` (da aggiungere al template) |
+| Grafana | 30030 | `127.0.0.1:30030` |
 
 Aggiungere una porta richiede di ricreare il cluster: kind non modifica i port mapping di un
-cluster esistente. Oggi il cluster contiene solo i pod di sistema, quindi il costo è nullo.
+cluster esistente. La porta di Grafana è stata aggiunta ricreando il cluster il 2026-10-05,
+quando conteneva solo i pod di sistema.
 
 ### Service mesh: nessuna
 
