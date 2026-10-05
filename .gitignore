@@ -1,0 +1,14 @@
+# Claude Code machine-local settings and state
+.claude/settings.local.json
+.claude/*.local.*
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
