@@ -59,7 +59,9 @@ buchi osservati.
 - [x] Spec Kit inizializzato (Claude Code, script Python, estensione `git`)
 - [x] Cluster kind con tetto 2 CPU / 4 GiB, envelope misurato
 - [x] Constitution v1.0.0 con Platform Envelope, in review
-- [ ] Prima feature: `/speckit-specify`
+- [x] Prima feature 001: spec scritta (`/speckit-specify`)
+- [ ] Decisione di piattaforma P-001 (esposizione, mesh, osservabilità), proposta in [`platform/README.md`](platform/README.md)
+- [ ] Feature 001: clarify, plan con gate SRE, tasks, analyze, implement
 - [ ] Primo deploy su kind
 - [ ] Preset `sre` ed estensione `run`, disegnati sui buchi osservati
 
@@ -69,7 +71,7 @@ buchi osservati.
   ciascuno con il suo proprietario (Dev o SRE).
 - [`sre-spec-driven.md`](sre-spec-driven.md): appunti di partenza sul ruolo dell'SRE in uno sviluppo
   spec-driven.
-- `platform/kind/`: definizione e script del cluster (livello piattaforma, proprietario SRE).
+- [`platform/`](platform/README.md): decisioni di piattaforma e cluster kind (proprietario SRE).
 - `.specify/`: configurazione Spec Kit (templates, scripts, workflow, estensione `git`).
 - `.claude/skills/`: i comandi `/speckit-*` per Claude Code.
 - `specs/NNN-slug/`: una cartella per feature (spec, plan, tasks), creata da `/speckit-specify`.
