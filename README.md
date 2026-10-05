@@ -9,7 +9,10 @@ spec.
 ## Il banco di prova
 
 - **App**: un URL shortener in Go, scritto interamente con Spec Kit.
-- **Infra**: un cluster kind locale sulla macchina dello sviluppatore, nessun cloud. La capacità
+- **Infra**: l'ambiente `dev` è un cluster kind locale sulla macchina dello sviluppatore;
+  `test` e `prod` potranno essere cluster GKE.
+  La piattaforma resta portabile su GKE in qualsiasi momento (vedi
+  [`platform/README.md`](platform/README.md)). La capacità
   riproduce l'infrastruttura reale indicata dal cliente ed è un **limite invalicabile**: è
   l'applicazione ad adattarsi alla piattaforma, non il contrario.
 - **Ruoli**: Dev e SRE sono la stessa persona, ma restano ruoli distinti; ogni principio e ogni

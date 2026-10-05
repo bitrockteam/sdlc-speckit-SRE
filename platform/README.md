@@ -3,6 +3,19 @@
 Livello piattaforma, proprietario SRE. Qui stanno le decisioni che valgono per tutte le feature
 e che consumano l'envelope della constitution prima che una feature ne chieda una quota.
 
+## Ambienti
+
+| Ambiente | Dove | Envelope | Stato |
+|---|---|---|---|
+| `dev` | cluster kind locale (`platform/kind/`) | 2 CPU / 4 GiB, invalicabile (constitution) | attivo |
+| `test` | cluster GKE | da definire con il cliente | possibile in qualsiasi momento |
+| `prod` | cluster GKE | da definire con il cliente | possibile in qualsiasi momento |
+
+`dev` è l'ambiente in cui oggi si sviluppa, si fa il deploy e si fa il run di ogni feature.
+`test` e `prod`, quando nasceranno, saranno cluster GKE veri, ciascuno con il proprio envelope e
+il proprio overlay. Il design di una feature deve stare in tutti gli envelope dichiarati; finché
+esiste solo `dev`, il riferimento è il suo.
+
 ## Decisione P-001: esposizione, mesh e stack di osservabilità
 
 **Stato**: proposta, 2026-10-05, da confermare prima del plan di 001.
@@ -18,7 +31,8 @@ Gli endpoint escono sulla macchina tramite `extraPortMappings` di kind verso Nod
 servizio applicativo, cioè un ottavo dell'envelope in cambio di nulla che serva al test.
 ingress-nginx inoltre è stato ritirato dal progetto Kubernetes nel 2026: non si adotta un
 componente senza manutenzione. Se in futuro servirà routing per host o path, si valuterà la
-Gateway API con una feature dedicata che ne giustifichi la quota.
+Gateway API con una feature dedicata che ne giustifichi la quota. Su GKE la Gateway API è
+gestita e non costa envelope (vedi Portabilità).
 
 | Endpoint | NodePort | Host |
 |---|---|---|
@@ -64,6 +78,35 @@ piattaforma).
 
 Il generatore di carico per verificare gli SC gira sulla macchina host, fuori dal cluster, così
 non consuma envelope e misura il servizio dal punto di vista dell'utente.
+
+### Portabilità verso GKE
+
+Il porting su GKE deve restare possibile in qualsiasi momento senza toccare spec né codice:
+cambia solo la configurazione d'ambiente. Regole:
+
+- **Base più overlay.** I manifest di ogni feature sono una base neutra (Deployment, Service
+  `ClusterIP`, ConfigMap) con un overlay per ambiente (`dev` oggi, `test` e `prod` su GKE quando serviranno), tramite
+  Kustomize, già incluso in `kubectl` e quindi senza nuove dipendenze (principio IX).
+  Nell'overlay vanno solo le differenze d'ambiente: esposizione, riferimento all'immagine,
+  exporter del collector.
+- **Esposizione solo nell'overlay.** In `dev` è NodePort. Su GKE è la Gateway API con il
+  controller gestito di GKE, che non gira nel cluster e quindi non consuma envelope.
+- **Telemetria solo OTLP.** L'applicazione parla soltanto con il collector. Su GKE basta
+  cambiare gli exporter del collector verso Managed Prometheus, Cloud Logging e Cloud Trace,
+  oppure tenere lo stesso stack: l'applicazione non se ne accorge.
+- **Niente costrutti specifici di kind nella base:** nessun `hostPath`, nessun riferimento a
+  nodi, nessuna `storageClassName` esplicita (si usa la classe di default di ciascun cluster).
+  La raccolta dei log dei pod dai file del nodo è un dettaglio d'ambiente e sta nell'overlay.
+- **L'envelope diventa una `ResourceQuota`.** Il limite di 800m e ~3,0 GiB di requests si
+  applica come `ResourceQuota` sui namespace dell'applicazione e dell'osservabilità. In `dev` fa
+  rispettare la regola della constitution già in fase di ammissione, invece che solo in review;
+  su GKE ogni ambiente avrà la propria quota, pari al suo envelope.
+- **Immagini per riferimento.** In `dev` si caricano con `kind load`; su GKE vengono da Artifact
+  Registry. Cambia solo il riferimento nell'overlay, mentre le label OCI di provenance
+  (principio VI) restano identiche.
+
+Ne segue un vincolo per il plan di 001: il datastore scelto deve funzionare uguale su kind e su
+GKE, cioè su un volume persistente generico o come servizio esterno raggiungibile per indirizzo.
 
 ### Conseguenza per il design dell'applicazione
 
