@@ -1,0 +1,26 @@
+# kind cluster for sdlc-speckit-SRE: one node, hard-capped.
+# up.ps1 fills the __SYS_CPU__ and __SYS_MEM__ placeholders so that the kubelet's allocatable
+# matches the Docker cap on the node container instead of the whole Docker VM.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: sdlc
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # URL shortener (NodePort)
+      - containerPort: 30080
+        hostPort: 30080
+        listenAddress: 127.0.0.1
+      # Prometheus (NodePort)
+      - containerPort: 30090
+        hostPort: 30090
+        listenAddress: 127.0.0.1
+    kubeadmConfigPatches:
+      - |
+        kind: KubeletConfiguration
+        systemReserved:
+          cpu: "__SYS_CPU__"
+          memory: "__SYS_MEM__"
+        evictionHard:
+          memory.available: "200Mi"
+        maxPods: 40
