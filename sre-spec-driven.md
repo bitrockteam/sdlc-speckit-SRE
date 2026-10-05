@@ -97,6 +97,18 @@ I tre modelli organizzativi:
 | spec e codice coerenti, l'ambiente rompe | vincoli operativi / configurazione |
 | spec rispettata ma sbagliata rispetto al mondo reale | intento |
 
+## Buchi osservati in Spec Kit per il "run it"
+
+Registro dei punti in cui Spec Kit vanilla (1.1.1) non copre il lavoro SRE, osservati usando lo
+strumento sulla feature 001. Ogni passo del ciclo aggiunge qui i suoi. È la base per disegnare
+il preset `sre` e l'estensione `run`: si costruisce solo ciò che qui ha un buco documentato.
+
+| ID | Passo | Buco | Come l'abbiamo coperto per ora | Dove potrebbe vivere |
+|---|---|---|---|---|
+| G-001 | constitution, plan | Nessun concetto di ambiente: spec e plan non distinguono `dev`, `test` e `prod`, eppure envelope e SLO possono cambiare fra un ambiente e l'altro. | Tabella degli ambienti nella constitution v1.1.0; il design deve stare in tutti gli envelope dichiarati. | preset `sre`: sezione ambienti nel plan-template, con envelope e SLO per ambiente |
+| G-002 | specify | Le linee guida dei Success Criteria spingono verso esiti percepiti e vaghi ("gli utenti vedono i risultati all'istante") e scoraggiano soglie di latenza; all'SRE servono soglie e finestre misurabili sul servizio in esecuzione. | SC-001..SC-008 scritti con percentili, soglie e finestre, misurati al confine del servizio. | preset `sre`: linee guida degli SC nello spec-template |
+| G-003 | fuori ciclo | Nessun livello per le decisioni di piattaforma: tutto è feature (`specs/NNN-slug`), ma la piattaforma consuma envelope prima di ogni feature e non è una feature. | Decisione P-001 in `platform/README.md`, richiamata dalla constitution. | da decidere: un tipo di artefatto "platform decision" o una feature SRE dedicata |
+
 ## Aperto
 
 - I manifest Kubernetes (limits, HPA, repliche) nascono da Spec Kit o vivono in un repo
