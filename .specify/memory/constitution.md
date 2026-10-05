@@ -1,50 +1,143 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# sdlc-speckit-SRE Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+Each principle has an owning role. Today Dev and SRE are the same person; the roles stay distinct
+so that every artifact has exactly one owner.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### I. Spec-First, Code Is Derived (owner: Dev)
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+- The specification is the primary artifact; code is its materialization.
+- Any behavioral change, incident fixes included, MUST start by amending the owning artifact
+  (`spec.md` or `plan.md`) before the code changes.
+- Hand-patching code without updating the owning artifact is forbidden.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Rationale: if code is regenerated from the spec, a fix applied only to code is lost on the next
+generation and the defect returns.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### II. Test-First (owner: Dev, NON-NEGOTIABLE)
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- Every functional requirement (`FR-xxx`) and success criterion (`SC-xxx`) MUST have at least one
+  automated test, written and failing before the implementation.
+- Tests use the Go standard `testing` package; red-green-refactor is enforced.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+Rationale: the tests are what bind the derived code to the spec.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### III. Operability Is a Requirement (owner: SRE)
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- Every observable success criterion MUST map to an SLI and an SLO with threshold and window,
+  recorded in `plan.md`.
+- Every non-functional constraint in `plan.md` MUST carry an ID (`OC-xxx`) and a measurable
+  threshold.
+- A feature is not done until its SLOs are defined and measurable on the running system.
+
+Rationale: a constraint without an ID and a threshold cannot be traced from a runtime violation
+back to the artifact that should have prevented it.
+
+### IV. Bounded Resources (owner: SRE)
+
+- No unbounded caches, queues, goroutines or buffers; every in-memory structure MUST declare its
+  bound.
+- Each feature MUST declare a memory and CPU budget in `plan.md`; Kubernetes requests and limits
+  are derived from that budget, never chosen independently.
+
+Rationale: unbounded growth is the most common way a correct feature fails at runtime, and limits
+set apart from the plan create a second, drifting source of intent.
+
+### V. Observability by Default (owner: SRE)
+
+- OpenTelemetry for traces and metrics; RED metrics (rate, errors, duration) per endpoint;
+  structured JSON logs.
+- Every telemetry signal MUST carry `service.version` (the commit SHA) and the feature branch ID.
+
+Rationale: a runtime signal that already names its version and feature does not need to be
+correlated after the fact.
+
+### VI. Provenance (owner: SRE)
+
+- Container images MUST carry the OCI labels `org.opencontainers.image.revision` and
+  `org.opencontainers.image.source`, plus the feature ID.
+- Kubernetes Deployments MUST carry the same values as annotations.
+- Any running pod MUST resolve to commit, feature and spec as recorded data, without guessing.
+
+Rationale: tracing an incident to its spec is only reliable if every link of the chain is data.
+
+### VII. Safe Delivery (owner: SRE)
+
+- Every deployable service MUST expose readiness and liveness probes and shut down gracefully on
+  SIGTERM.
+- Every deployable change MUST document its rollout and rollback procedure.
+
+Rationale: recovery has to be cheap and predictable so that it never substitutes for a fix.
+
+### VIII. Incidents Flow Upstream (owner: SRE leads, Dev approves)
+
+- Every incident MUST get a postmortem whose main output states where the violated constraint
+  should have been written: constitution (recurring class of failure), spec or plan
+  (feature-specific), test, or platform configuration.
+- Mitigation (restart, scaling, rollback) MUST NOT close an incident; only a verified upstream fix
+  does, checked against the original success criteria and SLOs.
+
+Rationale: recovery, remediation and root cause resolution are different outcomes; only the last
+one prevents recurrence.
+
+### IX. Simplicity (owner: Dev)
+
+- Go standard library first.
+- Every new dependency MUST be justified in the Complexity Tracking section of `plan.md`.
+
+Rationale: each dependency is code nobody specified.
+
+## Technology and Runtime Constraints
+
+- Language: Go, latest stable release.
+- Runtime: a local kind cluster on the developer's machine; no cloud environment.
+- Container images are built locally and loaded into kind.
+- Kubernetes manifests are versioned in this repository next to the feature that produces them.
+- Metrics are Prometheus-compatible.
+
+### Platform Envelope (owner: SRE, NON-NEGOTIABLE)
+
+The capacity below is the real infrastructure available, as stated by the customer. It is a hard
+limit, not a default to be raised when a feature needs more; the application design MUST fit
+inside it. The cluster is created by `platform/kind/up.ps1` and the values were measured on
+2026-10-05.
+
+| Item | CPU | Memory |
+|---|---|---|
+| Node hard cap (Docker limit on the single kind node) | 2 | 4 GiB |
+| Node allocatable (what the scheduler can place) | 1750m | ~3.3 GiB |
+| Kubernetes system pods, requests | 950m | 290 MiB |
+| **Left for observability stack and application, requests** | **800m** | **~3.0 GiB** |
+
+- Every pod MUST declare CPU and memory requests and limits; the sum of requests of everything
+  outside `kube-system` MUST NOT exceed the remaining envelope.
+- CPU requests are the scarcest resource: the system pods already take 54% of allocatable.
+- Each feature's budget (principle IV) is allocated from this envelope in `plan.md`, together
+  with the share already taken by previous features and by the observability stack.
+- A plan that does not fit MUST change the design, not the envelope.
+
+## Development and Operations Workflow
+
+- Spec Kit cycle: constitution, specify, clarify, plan, tasks, analyze, implement, converge.
+- Each feature lives on its own `NNN-slug` branch and is merged to `main` through a pull request.
+- SRE gate at plan time for features above the risk threshold: a new service, a new datastore, or
+  a load-sensitive path. The gate checks principles III to VII against `plan.md`.
+- Production-readiness gate before deploying to kind: SLOs measurable, resource budget mapped to
+  requests and limits, probes, provenance labels and annotations, rollback procedure documented.
+- After deployment, observed SLOs are compared with the success criteria; an incident follows
+  principle VIII.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- This constitution supersedes all other practices in this repository.
+- Ownership: principles III to VIII belong to the SRE role; I, II and IX to the Dev role.
+  Amendments to a principle are proposed by its owner and approved by the other role.
+- Amendments come from postmortems (principle VIII) or explicit decisions, and are recorded in the
+  Sync Impact Report of the amending change.
+- Versioning follows semantic versioning: MAJOR for removed or redefined principles, MINOR for new
+  principles or materially expanded guidance, PATCH for clarifications.
+- Compliance: the Constitution Check in every `plan.md` verifies principles I to IX; every pull
+  request verifies that changed behavior has an amended owning artifact.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-10-05 | **Last Amended**: 2026-10-05
