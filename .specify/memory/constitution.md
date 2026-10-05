@@ -164,11 +164,12 @@ needed; keeping every environment difference in overlays makes the port a config
 - This constitution supersedes all other practices in this repository.
 - Ownership: principles III to VIII belong to the SRE role; I, II and IX to the Dev role.
   Amendments to a principle are proposed by its owner and approved by the other role.
-- Amendments come from postmortems (principle VIII) or explicit decisions, and are recorded in the
-  Sync Impact Report of the amending change.
+- Amendments come from postmortems (principle VIII) or explicit decisions. The Sync Impact Report
+  is review material only and is removed before commit; the durable record of an amendment is
+  its commit message, which states version change, changed sections and source.
 - Versioning follows semantic versioning: MAJOR for removed or redefined principles, MINOR for new
   principles or materially expanded guidance, PATCH for clarifications.
 - Compliance: the Constitution Check in every `plan.md` verifies principles I to IX; every pull
   request verifies that changed behavior has an amended owning artifact.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-05 | **Last Amended**: 2026-10-05
+**Version**: 1.1.1 | **Ratified**: 2026-10-05 | **Last Amended**: 2026-10-05
