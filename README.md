@@ -61,7 +61,7 @@ buchi osservati.
 
 - [x] Spec Kit inizializzato (Claude Code, script Python, estensione `git`)
 - [x] Cluster kind con tetto 2 CPU / 4 GiB, envelope misurato
-- [x] Constitution v1.0.0 con Platform Envelope, in review
+- [x] Constitution v1.1.0: Platform Envelope, ambienti e portabilità
 - [x] Prima feature 001: spec scritta (`/speckit-specify`)
 - [x] Decisione di piattaforma P-001 (esposizione, mesh, osservabilità, portabilità), accettata in [`platform/README.md`](platform/README.md)
 - [ ] Feature 001: clarify, plan con gate SRE, tasks, analyze, implement

@@ -91,9 +91,12 @@ Rationale: each dependency is code nobody specified.
 ## Technology and Runtime Constraints
 
 - Language: Go, latest stable release.
-- Runtime: a local kind cluster on the developer's machine; no cloud environment.
-- Container images are built locally and loaded into kind.
-- Kubernetes manifests are versioned in this repository next to the feature that produces them.
+- Runtime: Kubernetes. The `dev` environment is a local kind cluster on the developer's machine;
+  `test` and `prod` may become GKE clusters (see Environments and Portability).
+- Container images are built locally and loaded into kind in `dev`; other environments pull them
+  from a registry.
+- Kubernetes manifests are versioned in this repository next to the feature that produces them,
+  as a neutral Kustomize base plus one overlay per environment.
 - Metrics are Prometheus-compatible.
 
 ### Platform Envelope (owner: SRE, NON-NEGOTIABLE)
@@ -116,6 +119,34 @@ inside it. The cluster is created by `platform/kind/up.ps1` and the values were 
 - Each feature's budget (principle IV) is allocated from this envelope in `plan.md`, together
   with the share already taken by previous features and by the observability stack.
 - A plan that does not fit MUST change the design, not the envelope.
+- The envelope MUST be enforced as a `ResourceQuota` on the application and observability
+  namespaces, so the sum rule is checked at admission and not only in review.
+- Platform components are allocated first. The observability stack of platform decision P-001
+  (`platform/README.md`) takes 450m CPU and ~1.1 GiB of requests, leaving **350m CPU and
+  ~1.9 GiB of requests to applications** in `dev`.
+
+### Environments and Portability (owner: SRE)
+
+| Environment | Where | Envelope |
+|---|---|---|
+| `dev` | local kind cluster (`platform/kind/`) | the Platform Envelope above |
+| `test` | GKE cluster, when created | agreed with the customer when created |
+| `prod` | GKE cluster, when created | agreed with the customer when created |
+
+- A feature design MUST fit every declared envelope; today only `dev` is declared.
+- Porting to GKE MUST change configuration only, never spec or code.
+- Manifests MUST be a neutral Kustomize base plus one overlay per environment. Exposure (NodePort
+  in `dev`, managed Gateway API on GKE), image reference and collector exporters live only in
+  overlays.
+- The base MUST NOT contain kind-specific constructs: no `hostPath`, no node references, no
+  explicit `storageClassName`.
+- Applications MUST emit telemetry only via OTLP to the in-cluster OpenTelemetry Collector, never
+  directly to a backend.
+- Datastores MUST work identically on kind and GKE: a generic persistent volume, or an external
+  service reached by address.
+
+Rationale: portability that is not enforced from the first feature is lost by the time it is
+needed; keeping every environment difference in overlays makes the port a configuration change.
 
 ## Development and Operations Workflow
 
@@ -123,7 +154,7 @@ inside it. The cluster is created by `platform/kind/up.ps1` and the values were 
 - Each feature lives on its own `NNN-slug` branch and is merged to `main` through a pull request.
 - SRE gate at plan time for features above the risk threshold: a new service, a new datastore, or
   a load-sensitive path. The gate checks principles III to VII against `plan.md`.
-- Production-readiness gate before deploying to kind: SLOs measurable, resource budget mapped to
+- Production-readiness gate before deploying to any environment: SLOs measurable, resource budget mapped to
   requests and limits, probes, provenance labels and annotations, rollback procedure documented.
 - After deployment, observed SLOs are compared with the success criteria; an incident follows
   principle VIII.
@@ -140,4 +171,4 @@ inside it. The cluster is created by `platform/kind/up.ps1` and the values were 
 - Compliance: the Constitution Check in every `plan.md` verifies principles I to IX; every pull
   request verifies that changed behavior has an amended owning artifact.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-05 | **Last Amended**: 2026-10-05
+**Version**: 1.1.0 | **Ratified**: 2026-10-05 | **Last Amended**: 2026-10-05
